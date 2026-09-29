@@ -10,8 +10,8 @@
 # The binary lands in <work-directory>/out/<target>/.
 #
 # It holds what an export uses and nothing else: x264 for mp4, libvpx VP9 with
-# alpha for webm, ProRes 4444 for mov, GIF, the decoders that verify each, and
-# raw frames in over a pipe. No network, devices or autodetected system
+# alpha for webm, ProRes 4444 for mov, GIF, libwebp for animated WebP with
+# alpha, the decoders that verify each, and raw frames in over a pipe. No network, devices or autodetected system
 # libraries. GPL because of x264, never nonfree, so it can be redistributed.
 set -euo pipefail
 
@@ -141,6 +141,22 @@ if [ ! -f "$prefix/lib/libvpx.a" ]; then
   )
 fi
 
+if [ ! -f "$prefix/lib/libwebp.a" ]; then
+  src=$(source_dir libwebp)
+  (
+    cd "$src"
+    # The encoder and the animation muxer (WebPAnimEncoder) FFmpeg's
+    # libwebp_anim uses; FFmpeg decodes WebP itself when an export is verified.
+    CC="$cc" ./configure \
+      --prefix="$prefix" --host="$x264_host" \
+      --enable-static --disable-shared --with-pic \
+      --enable-libwebpmux --disable-libwebpdemux --disable-libwebpdecoder --disable-libwebpextras \
+      --disable-png --disable-jpeg --disable-tiff --disable-gif --disable-wic --disable-sdl --disable-gl
+    make -j"$jobs"
+    make install
+  )
+fi
+
 src=$(source_dir ffmpeg)
 (
   cd "$src"
@@ -154,15 +170,15 @@ src=$(source_dir ffmpeg)
     --extra-ldflags="-L$prefix/lib $ldflags" \
     ${extra_libs:+--extra-libs="$extra_libs"} \
     ${ff_asm[@]+"${ff_asm[@]}"} \
-    --enable-gpl --enable-libx264 --enable-libvpx \
+    --enable-gpl --enable-libx264 --enable-libvpx --enable-libwebp \
     --disable-autodetect --disable-everything --disable-network \
     --disable-doc --disable-debug --disable-ffplay --disable-ffprobe --disable-avdevice \
     --enable-protocol=file,pipe \
-    --enable-demuxer=rawvideo,mov,matroska,gif \
-    --enable-muxer=mp4,mov,webm,gif,rawvideo \
-    --enable-encoder=libx264,libvpx_vp9,prores_ks,gif,rawvideo \
-    --enable-decoder=rawvideo,h264,prores,libvpx_vp9,vp9,gif \
-    --enable-parser=gif,h264,vp9,prores \
+    --enable-demuxer=rawvideo,mov,matroska,gif,webp_anim \
+    --enable-muxer=mp4,mov,webm,gif,webp,rawvideo \
+    --enable-encoder=libx264,libvpx_vp9,prores_ks,gif,libwebp_anim,rawvideo \
+    --enable-decoder=rawvideo,h264,prores,libvpx_vp9,vp9,gif,webp_anim \
+    --enable-parser=gif,h264,vp9,prores,webp \
     --enable-bsf=vp9_superframe,vp9_superframe_split \
     --enable-filter=format,split,palettegen,paletteuse,scale,null,copy,fps,setpts,trim
   make -j"$jobs"
@@ -181,5 +197,5 @@ case $target in
   win32-*) "${cross}strip" "$out/$exe" ;;
 esac
 cp "$src/COPYING.GPLv2" "$out/COPYING.GPLv2"
-awk '$1 == "ffmpeg" || $1 == "x264" || $1 == "libvpx" { print $1, $2 }' "$here/sources.txt" > "$out/VERSIONS"
+awk '$1 == "ffmpeg" || $1 == "x264" || $1 == "libvpx" || $1 == "libwebp" { print $1, $2 }' "$here/sources.txt" > "$out/VERSIONS"
 echo "built $out/$exe ($(wc -c < "$out/$exe") bytes)"

@@ -55,17 +55,18 @@ for (const [target, { os, cpu, label }] of Object.entries(targets)) {
 
 FFmpeg ${versions.ffmpeg} for ${label}, built for the [clayzo](https://www.npmjs.com/package/clayzo) CLI. clayzo installs it on this platform itself; you don't need to install it.
 
-It holds only what clayzo's exports use: x264 for H.264, libvpx for VP9 with alpha, ProRes 4444 and GIF, and the decoders that verify them. No network access, devices or system libraries beyond the operating system's own.
+It holds only what clayzo's exports use: x264 for H.264, libvpx for VP9 with alpha, ProRes 4444, GIF and libwebp for animated WebP with alpha, and the decoders that verify them. No network access, devices or system libraries beyond the operating system's own.
 
 | Component | Version | License |
 | --- | --- | --- |
 | FFmpeg | ${versions.ffmpeg} | GPL-2.0-or-later as built (LGPL-2.1-or-later without x264) |
 | x264 | ${versions.x264} | GPL-2.0-or-later |
 | libvpx | ${versions.libvpx} | BSD-3-Clause |
+| libwebp | ${versions.libwebp} | BSD-3-Clause |
 
 ## License and source
 
-This binary is licensed under the GNU General Public License, version 2 or (at your option) any later version; see \`LICENSE\`. Its complete corresponding source, the FFmpeg, x264 and libvpx sources and the scripts that built it, is published with the release it came from: ${repository}/releases/tag/v${version}.
+This binary is licensed under the GNU General Public License, version 2 or (at your option) any later version; see \`LICENSE\`. Its complete corresponding source, the FFmpeg, x264, libvpx and libwebp sources and the scripts that built it, is published with the release it came from: ${repository}/releases/tag/v${version}.
 `,
   );
   console.log(`${name}@${version}`);

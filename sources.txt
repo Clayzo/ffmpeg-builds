@@ -1,8 +1,9 @@
 # Pinned sources: name version url sha256
-# Checked when pinned against Homebrew's formulae (ffmpeg, libvpx, nasm: same
-# URL and checksum; x264: same commit). The FFmpeg tarball's signature is also
+# Checked when pinned against Homebrew's formulae (ffmpeg, libvpx, libwebp,
+# nasm: same URL and checksum; x264: same commit). The FFmpeg tarball's signature is also
 # verified in CI against FFmpeg's release key.
 ffmpeg 9.0.2 https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz 8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
 x264 b35605ace3ddf7c1a5d67a2eb553f034aef41d55 https://code.videolan.org/videolan/x264/-/archive/b35605ace3ddf7c1a5d67a2eb553f034aef41d55/x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.bz2 6eeb82934e69fd51e043bd8c5b0d152839638d1ce7aa4eea65a3fedcf83ff224
 libvpx 1.17.0 https://github.com/webmproject/libvpx/archive/refs/tags/v1.17.0.tar.gz 1020f184046187baa2985dbde38e0691f49c44088bca7a1842b0236c6081dc0a
+libwebp 1.6.0 https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564
 nasm 3.02 https://www.nasm.us/pub/nasm/releasebuilds/3.02/nasm-3.02.tar.xz 87336eba53b4acfe917424ab5d500d2b0054d9f5148d35c2273ccf2cfb712f0d
