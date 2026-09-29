@@ -17,7 +17,7 @@ clayzo lists all five as optional dependencies, and the package manager installs
 Only what clayzo's exports use:
 
 - FFmpeg with the `ffmpeg` command-line tool; no `ffprobe`, `ffplay`, devices or network protocols
-- x264 for H.264 (mp4), libvpx for VP9 with alpha (webm), FFmpeg's own ProRes 4444 (mov) and GIF encoders
+- x264 for H.264 (mp4), libvpx for VP9 with alpha (webm), libwebp for animated WebP with alpha, FFmpeg's own ProRes 4444 (mov) and GIF encoders
 - the decoders, demuxers and parsers that read those files back, which is how clayzo verifies an export
 - raw frames in over a pipe, files and pipes out
 
@@ -25,7 +25,7 @@ System libraries are not autodetected. Each binary links only the operating syst
 
 ## Sources and verification
 
-`sources.txt` pins every source by URL and sha256. `fetch-sources.sh` refuses a file whose checksum differs, and checks FFmpeg's tarball against FFmpeg's release signature, made with the key in `keys/` and pinned by fingerprint (`FCF9 86EA 15E6 E293 A564 4F10 B432 2F04 D676 58D8`). When pinned, each source was also checked against Homebrew's formula: the same checksum for FFmpeg and libvpx, and the same commit for x264.
+`sources.txt` pins every source by URL and sha256. `fetch-sources.sh` refuses a file whose checksum differs, and checks FFmpeg's tarball against FFmpeg's release signature, made with the key in `keys/` and pinned by fingerprint (`FCF9 86EA 15E6 E293 A564 4F10 B432 2F04 D676 58D8`). When pinned, each source was also checked against Homebrew's formula: the same checksum for FFmpeg, libvpx and libwebp, and the same commit for x264.
 
 The build container images are pinned by digest, and the workflow's actions by commit. Every build runs `smoke-test.sh`: each export format is encoded with clayzo's own arguments, decoded back and counted, and the license is checked to be redistributable. Windows builds are tested on Windows.
 
@@ -41,8 +41,8 @@ Linux and Windows build in the containers under `docker/`, as `.github/workflows
 
 ## Releasing
 
-Push a tag `vX.Y.Z`. The workflow builds and tests every target, creates a GitHub release with the five binaries, the exact FFmpeg, x264 and libvpx sources, and `SHA256SUMS`, then publishes the five npm packages at `X.Y.Z` with provenance. It needs an `NPM_TOKEN` secret that can publish to the `@clayzo` scope.
+Push a tag `vX.Y.Z`. The workflow builds and tests every target, creates a GitHub release with the five binaries, the exact FFmpeg, x264, libvpx and libwebp sources, and `SHA256SUMS`, then publishes the five npm packages at `X.Y.Z` with provenance. It needs an `NPM_TOKEN` secret that can publish to the `@clayzo` scope.
 
 ## License
 
-The binaries are licensed under the GNU General Public License, version 2 or (at your option) any later version, because they include x264. FFmpeg is LGPL-2.1-or-later on its own, x264 is GPL-2.0-or-later and libvpx is BSD-3-Clause. The scripts in this repository are released under the same license, in `LICENSE`. Each GitHub release carries the complete corresponding source for its binaries.
+The binaries are licensed under the GNU General Public License, version 2 or (at your option) any later version, because they include x264. FFmpeg is LGPL-2.1-or-later on its own, x264 is GPL-2.0-or-later, and libvpx and libwebp are BSD-3-Clause. The scripts in this repository are released under the same license, in `LICENSE`. Each GitHub release carries the complete corresponding source for its binaries.
