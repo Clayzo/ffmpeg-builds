@@ -161,7 +161,8 @@ src=$(source_dir ffmpeg)
 (
   cd "$src"
   # Parsers are listed by hand: the gif demuxer needs its parser to split
-  # frames, and configure does not select it.
+  # frames, and configure does not select it. WebP needs both demuxers:
+  # libwebp writes an animation whose frames are all the same as a still.
   ./configure \
     --prefix="$prefix" \
     "${ff_target[@]}" \
@@ -174,10 +175,10 @@ src=$(source_dir ffmpeg)
     --disable-autodetect --disable-everything --disable-network \
     --disable-doc --disable-debug --disable-ffplay --disable-ffprobe --disable-avdevice \
     --enable-protocol=file,pipe \
-    --enable-demuxer=rawvideo,mov,matroska,gif,webp_anim \
+    --enable-demuxer=rawvideo,mov,matroska,gif,webp_anim,image_webp_pipe \
     --enable-muxer=mp4,mov,webm,gif,webp,rawvideo \
     --enable-encoder=libx264,libvpx_vp9,prores_ks,gif,libwebp_anim,rawvideo \
-    --enable-decoder=rawvideo,h264,prores,libvpx_vp9,vp9,gif,webp_anim \
+    --enable-decoder=rawvideo,h264,prores,libvpx_vp9,vp9,gif,webp_anim,webp \
     --enable-parser=gif,h264,vp9,prores,webp \
     --enable-bsf=vp9_superframe,vp9_superframe_split \
     --enable-filter=format,split,palettegen,paletteuse,scale,null,copy,fps,setpts,trim
