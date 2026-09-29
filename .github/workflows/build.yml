@@ -1,0 +1,156 @@
+name: Build
+
+# Every push and pull request builds and tests all five targets. A version tag
+# (v1.2.3) also publishes them: a GitHub release with the binaries and every
+# source they were built from, and one npm package per target, with provenance.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sources:
+    name: Fetch and verify sources
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - run: ./fetch-sources.sh downloads
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sources
+          path: downloads/
+          if-no-files-found: error
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: sources
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: darwin-arm64, runner: macos-15 }
+          - { target: darwin-x64, runner: macos-15 }
+          - { target: linux-x64, runner: ubuntu-24.04, image: linux }
+          - { target: linux-arm64, runner: ubuntu-24.04-arm, image: linux }
+          - { target: win32-x64, runner: ubuntu-24.04, image: windows }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sources
+          path: downloads
+      - name: Build on macOS
+        if: startsWith(matrix.target, 'darwin-')
+        run: |
+          command -v pkg-config >/dev/null || brew install pkgconf
+          FFMPEG_DOWNLOADS="$PWD/downloads" ./build.sh "${{ matrix.target }}" work
+      - name: Build in a container
+        if: matrix.image
+        run: |
+          docker build -t ffmpeg-build -f "docker/${{ matrix.image }}.Dockerfile" docker
+          docker run --rm -e FFMPEG_DOWNLOADS=/src/downloads -v "$PWD:/src" -w /src ffmpeg-build \
+            ./build.sh "${{ matrix.target }}" /src/work
+      - name: Smoke test
+        if: matrix.target != 'win32-x64'
+        run: |
+          if [ "${{ matrix.target }}" = darwin-x64 ]; then
+            /usr/bin/pgrep -q oahd || sudo softwareupdate --install-rosetta --agree-to-license
+            ./smoke-test.sh work/out/darwin-x64/ffmpeg "arch -x86_64"
+          else
+            ./smoke-test.sh "work/out/${{ matrix.target }}/ffmpeg"
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: build-${{ matrix.target }}
+          path: work/out/${{ matrix.target }}/
+          if-no-files-found: error
+
+  smoke-windows:
+    name: Smoke test win32-x64 on Windows
+    needs: build
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: build-win32-x64
+          path: build
+      - shell: bash
+        run: ./smoke-test.sh build/ffmpeg.exe
+
+  release:
+    name: Release and publish
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, smoke-windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # the GitHub release
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: build-*
+          path: builds
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sources
+          path: downloads
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Package
+        run: |
+          mkdir staged
+          for dir in builds/build-*; do mv "$dir" "staged/${dir#builds/build-}"; done
+          node npm/package.mjs "${GITHUB_REF_NAME#v}" staged
+      - name: GitHub release with sources and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          mkdir release
+          for dir in npm/dist/*/; do
+            target=$(basename "$dir")
+            tar -czf "release/ffmpeg-$version-$target.tar.gz" -C "$dir" .
+          done
+          libvpx=$(awk '$1 == "libvpx" { print $2 }' sources.txt)
+          cp downloads/ffmpeg-*.tar.xz downloads/ffmpeg-*.tar.xz.asc downloads/x264-*.tar.bz2 release/
+          cp "downloads/v$libvpx.tar.gz" "release/libvpx-$libvpx.tar.gz"
+          (cd release && sha256sum -- * > SHA256SUMS)
+          {
+            echo "FFmpeg builds for the clayzo CLI, one per platform, also published to npm as @clayzo/ffmpeg-<platform>-<arch>@$version."
+            echo
+            echo "Built from, and published here as the corresponding source under the GPL:"
+            echo
+            grep -v '^#' sources.txt | awk '$1 != "nasm" { print "- " $1 " " $2 }'
+            echo
+            echo "and the scripts in this repository at $GITHUB_REF_NAME. Each binary is licensed GPL-2.0-or-later."
+          } > notes.md
+          # Re-runnable: a run that failed after this step finds its release.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" release/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" release/* --title "$GITHUB_REF_NAME" --notes-file notes.md
+          fi
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          for dir in npm/dist/*/; do
+            name=$(node -p "require('./${dir}package.json').name")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already published"
+              continue
+            fi
+            npm publish "$dir" --provenance --access public
+          done
