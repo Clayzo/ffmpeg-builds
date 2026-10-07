@@ -120,7 +120,7 @@ for pair in "mp4 -c:a aac -b:a 192k" "webm -c:a libopus -b:a 160k" "mov -c:a pcm
     echo "sound.$ext decoded to $((bytes / 8)) samples of sound, expected about $samples" >&2
     exit 1
   fi
-  if [ "$(tr -d '\000' < "$work/sound.$ext.f32" | head -c 1 | wc -c | tr -d ' ')" -eq 0 ]; then
+  if cmp -s -n "$bytes" "$work/sound.$ext.f32" /dev/zero; then
     echo "sound.$ext decoded to silence" >&2
     exit 1
   fi
