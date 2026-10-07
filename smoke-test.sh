@@ -68,3 +68,61 @@ for name in out.mp4 out.webm out.mov out.gif out.webp; do
     *) echo "$name: $frames frames round-trip" ;;
   esac
 done
+
+# Sound. clayzo decodes each audio file a document uses to raw samples, mixes
+# them, and encodes the mix beside the picture: AAC in mp4, Opus in webm, PCM
+# in mov. A WAV of noise as long as the frames stands in for the file.
+rate=48000
+samples=$((rate * frames / 30))
+le16() { printf "$(printf '\\x%02x\\x%02x' $(($1 & 255)) $(($1 >> 8 & 255)))"; }
+le32() { printf "$(printf '\\x%02x\\x%02x\\x%02x\\x%02x' $(($1 & 255)) $(($1 >> 8 & 255)) $(($1 >> 16 & 255)) $(($1 >> 24 & 255)))"; }
+data_bytes=$((samples * 2 * 2))
+{
+  printf 'RIFF'; le32 $((36 + data_bytes)); printf 'WAVEfmt '
+  le32 16; le16 1; le16 2; le32 $rate; le32 $((rate * 4)); le16 4; le16 16
+  printf 'data'; le32 $data_bytes
+  head -c $data_bytes /dev/urandom
+} > "$work/sound.wav"
+
+# The way clayzo reads a document's audio file.
+ff -i "$work/sound.wav" -f f32le -ac 2 -ar $rate "$work/sound.f32"
+bytes=$(wc -c < "$work/sound.f32" | tr -d ' ')
+if [ "$bytes" -ne $((samples * 2 * 4)) ]; then
+  echo "sound.wav decoded to $bytes bytes, expected $((samples * 2 * 4))" >&2
+  exit 1
+fi
+echo "sound.wav: $samples samples decoded"
+
+# The arguments media/node.ts passes when an export carries sound.
+for pair in "mp4 -c:a aac -b:a 192k" "webm -c:a libopus -b:a 160k" "mov -c:a pcm_s24le"; do
+  set -- $pair
+  ext=$1
+  shift
+  video=()
+  case $ext in
+    mp4) video=(-c:v libx264 -crf 8 -pix_fmt yuv420p -movflags +faststart) ;;
+    webm) video=(-c:v libvpx-vp9 -crf 9 -b:v 0 -pix_fmt yuva420p -auto-alt-ref 0) ;;
+    mov) video=(-c:v prores_ks -profile:v 4444 -pix_fmt yuva444p10le) ;;
+  esac
+  encode "sound.$ext" -f f32le -ar $rate -ac 2 -i "$work/sound.f32" -map 0:v:0 -map 1:a:0 "${video[@]}" "$@"
+  decoder=()
+  [ "$ext" = webm ] && decoder=(-c:v libvpx-vp9)
+  ff ${decoder[@]+"${decoder[@]}"} -i "$work/sound.$ext" -map 0:v:0 -f rawvideo -pix_fmt rgba -fps_mode passthrough "$work/sound.$ext.rgba"
+  bytes=$(wc -c < "$work/sound.$ext.rgba" | tr -d ' ')
+  if [ "$bytes" -ne $((frame_bytes * frames)) ]; then
+    echo "sound.$ext decoded to $bytes bytes of picture, expected $((frame_bytes * frames))" >&2
+    exit 1
+  fi
+  ff -i "$work/sound.$ext" -map 0:a:0 -f f32le -ac 2 -ar $rate "$work/sound.$ext.f32"
+  bytes=$(wc -c < "$work/sound.$ext.f32" | tr -d ' ')
+  # Lossy codecs pad to whole packets; within a packet of the original either way.
+  if [ "$bytes" -lt $(((samples - 2048) * 8)) ] || [ "$bytes" -gt $(((samples + 2048) * 8)) ]; then
+    echo "sound.$ext decoded to $((bytes / 8)) samples of sound, expected about $samples" >&2
+    exit 1
+  fi
+  if [ "$(tr -d '\000' < "$work/sound.$ext.f32" | head -c 1 | wc -c | tr -d ' ')" -eq 0 ]; then
+    echo "sound.$ext decoded to silence" >&2
+    exit 1
+  fi
+  echo "sound.$ext: $frames frames and $((bytes / 8)) samples of sound round-trip"
+done
