@@ -11,8 +11,11 @@
 #
 # It holds what an export uses and nothing else: x264 for mp4, libvpx VP9 with
 # alpha for webm, ProRes 4444 for mov, GIF, libwebp for animated WebP with
-# alpha, the decoders that verify each, and raw frames in over a pipe. No network, devices or autodetected system
-# libraries. GPL because of x264, never nonfree, so it can be redistributed.
+# alpha, the decoders that verify each, and raw frames in over a pipe. For
+# sound: the decoders for the audio files a document uses, FFmpeg's AAC for
+# mp4, libopus for webm, PCM for mov, and raw samples in and out. No network,
+# devices or autodetected system libraries. GPL because of x264, never nonfree,
+# so it can be redistributed.
 set -euo pipefail
 
 target=${1:?target}
@@ -157,12 +160,34 @@ if [ ! -f "$prefix/lib/libwebp.a" ]; then
   )
 fi
 
+if [ ! -f "$prefix/lib/libopus.a" ]; then
+  src=$(source_dir opus)
+  (
+    cd "$src"
+    # The encoder for webm's sound. FFmpeg's own Opus encoder is still
+    # experimental; FFmpeg decodes Opus itself when an export is verified.
+    CC="$cc" ./configure \
+      --prefix="$prefix" --host="$x264_host" \
+      --enable-static --disable-shared --with-pic \
+      --disable-doc --disable-extra-programs
+    make -j"$jobs"
+    make install
+  )
+fi
+
 src=$(source_dir ffmpeg)
 (
   cd "$src"
   # Parsers are listed by hand: the gif demuxer needs its parser to split
   # frames, and configure does not select it. WebP needs both demuxers:
   # libwebp writes an animation whose frames are all the same as a still.
+  #
+  # Sound: clayzo decodes each audio file a document uses to raw samples
+  # (f32le out), mixes them itself, and hands the mix back (f32le in) to be
+  # encoded beside the picture. The demuxers and decoders cover the files a
+  # document is likely to hold (WAV, AIFF, MP3, AAC and M4A, Ogg Vorbis and
+  # Opus, FLAC, WebM); aresample and aformat are what FFmpeg inserts to
+  # convert between them.
   ./configure \
     --prefix="$prefix" \
     "${ff_target[@]}" \
@@ -171,17 +196,23 @@ src=$(source_dir ffmpeg)
     --extra-ldflags="-L$prefix/lib $ldflags" \
     ${extra_libs:+--extra-libs="$extra_libs"} \
     ${ff_asm[@]+"${ff_asm[@]}"} \
-    --enable-gpl --enable-libx264 --enable-libvpx --enable-libwebp \
+    --enable-gpl --enable-libx264 --enable-libvpx --enable-libwebp --enable-libopus \
     --disable-autodetect --disable-everything --disable-network \
     --disable-doc --disable-debug --disable-ffplay --disable-ffprobe --disable-avdevice \
     --enable-protocol=file,pipe \
     --enable-demuxer=rawvideo,mov,matroska,gif,webp_anim,image_webp_pipe \
-    --enable-muxer=mp4,mov,webm,gif,webp,rawvideo \
+    --enable-demuxer=wav,aiff,mp3,aac,ogg,flac,pcm_f32le \
+    --enable-muxer=mp4,mov,webm,gif,webp,rawvideo,pcm_f32le \
     --enable-encoder=libx264,libvpx_vp9,prores_ks,gif,libwebp_anim,rawvideo \
+    --enable-encoder=aac,libopus,pcm_s24le,pcm_f32le \
     --enable-decoder=rawvideo,h264,prores,libvpx_vp9,vp9,gif,webp_anim,webp \
-    --enable-parser=gif,h264,vp9,prores,webp \
+    --enable-decoder=pcm_u8,pcm_s16le,pcm_s16be,pcm_s24le,pcm_s24be,pcm_s32le,pcm_s32be \
+    --enable-decoder=pcm_f32le,pcm_f32be,pcm_f64le,pcm_f64be,pcm_alaw,pcm_mulaw \
+    --enable-decoder=mp3float,aac,alac,flac,vorbis,opus \
+    --enable-parser=gif,h264,vp9,prores,webp,aac,mpegaudio,flac,vorbis,opus \
     --enable-bsf=vp9_superframe,vp9_superframe_split \
-    --enable-filter=format,split,palettegen,paletteuse,scale,null,copy,fps,setpts,trim
+    --enable-filter=format,split,palettegen,paletteuse,scale,null,copy,fps,setpts,trim \
+    --enable-filter=aresample,aformat,anull,atrim,asetpts
   make -j"$jobs"
 )
 
@@ -198,5 +229,5 @@ case $target in
   win32-*) "${cross}strip" "$out/$exe" ;;
 esac
 cp "$src/COPYING.GPLv2" "$out/COPYING.GPLv2"
-awk '$1 == "ffmpeg" || $1 == "x264" || $1 == "libvpx" || $1 == "libwebp" { print $1, $2 }' "$here/sources.txt" > "$out/VERSIONS"
+awk '$1 == "ffmpeg" || $1 == "x264" || $1 == "libvpx" || $1 == "libwebp" || $1 == "opus" { print $1, $2 }' "$here/sources.txt" > "$out/VERSIONS"
 echo "built $out/$exe ($(wc -c < "$out/$exe") bytes)"
