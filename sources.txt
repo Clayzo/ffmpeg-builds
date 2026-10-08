@@ -1,9 +1,15 @@
-# Pinned sources: name version url sha256
+# Pinned sources: name version url sha256 [fallback-url]
+#
+# A fallback URL is tried only when the file from the first does not match its
+# sha256, and what it serves must match the same sha256. x264's falls back to
+# this repository's own v1.1.0 release, which carries the identical tarball:
+# code.videolan.org has started answering scripted downloads, CI's included,
+# with a page asking the browser to prove it is not a bot.
 # Checked when pinned against Homebrew's formulae (ffmpeg, libvpx, libwebp,
 # opus, nasm: same URL and checksum; x264: same commit). The FFmpeg tarball's
 # signature is also verified in CI against FFmpeg's release key.
 ffmpeg 9.0.2 https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz 8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
-x264 b35605ace3ddf7c1a5d67a2eb553f034aef41d55 https://code.videolan.org/videolan/x264/-/archive/b35605ace3ddf7c1a5d67a2eb553f034aef41d55/x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.bz2 6eeb82934e69fd51e043bd8c5b0d152839638d1ce7aa4eea65a3fedcf83ff224
+x264 b35605ace3ddf7c1a5d67a2eb553f034aef41d55 https://code.videolan.org/videolan/x264/-/archive/b35605ace3ddf7c1a5d67a2eb553f034aef41d55/x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.bz2 6eeb82934e69fd51e043bd8c5b0d152839638d1ce7aa4eea65a3fedcf83ff224 https://github.com/Clayzo/ffmpeg-builds/releases/download/v1.1.0/x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.bz2
 libvpx 1.17.0 https://github.com/webmproject/libvpx/archive/refs/tags/v1.17.0.tar.gz 1020f184046187baa2985dbde38e0691f49c44088bca7a1842b0236c6081dc0a
 libwebp 1.6.0 https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564
 opus 1.6.1 https://ftp.osuosl.org/pub/xiph/releases/opus/opus-1.6.1.tar.gz 6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1

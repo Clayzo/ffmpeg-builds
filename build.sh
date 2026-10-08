@@ -34,12 +34,16 @@ sha256() {
 }
 
 # Downloads (once) and unpacks a pinned source, refusing one whose checksum
-# does not match sources.txt.
+# does not match sources.txt. A fallback URL there is tried when the first
+# serves anything else.
 source_dir() {
-  local name=$1 url sum file
-  read -r _ _ url sum < <(grep "^$name " "$here/sources.txt")
+  local name=$1 url sum fallback file
+  read -r _ _ url sum fallback < <(grep "^$name " "$here/sources.txt")
   file=$downloads/$(basename "$url")
-  [ -f "$file" ] || curl -fsSL --retry 3 -o "$file" "$url"
+  [ -f "$file" ] || curl -fsSL --retry 3 -o "$file" "$url" || true
+  if [ "$(sha256 "$file" 2>/dev/null)" != "$sum" ] && [ -n "$fallback" ]; then
+    curl -fsSL --retry 3 -o "$file" "$fallback"
+  fi
   if [ "$(sha256 "$file")" != "$sum" ]; then
     echo "$file does not match its pinned sha256" >&2
     exit 1

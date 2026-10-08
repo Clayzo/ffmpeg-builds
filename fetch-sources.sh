@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Downloads every pinned source into <directory> and checks it: each file
 # against its sha256 in sources.txt, and FFmpeg's tarball against FFmpeg's
-# release signature, made with the key in keys/ and pinned by fingerprint.
+# release signature, made with the key in keys/ and pinned by fingerprint. A
+# source with a fallback URL is fetched from there when the first URL serves
+# anything else, and must match the same sha256.
 #
 #   fetch-sources.sh <directory>
 set -euo pipefail
@@ -14,10 +16,14 @@ sha256() {
   if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
 }
 
-grep -v '^#' "$here/sources.txt" | while read -r name version url sum; do
+grep -v '^#' "$here/sources.txt" | while read -r name version url sum fallback; do
   [ -n "$name" ] || continue
   file=$dir/$(basename "$url")
-  [ -f "$file" ] || curl -fsSL --retry 3 -o "$file" "$url"
+  [ -f "$file" ] || curl -fsSL --retry 3 -o "$file" "$url" || true
+  if [ "$(sha256 "$file" 2>/dev/null)" != "$sum" ] && [ -n "$fallback" ]; then
+    echo "$name: $url did not serve the pinned file; trying $fallback" >&2
+    curl -fsSL --retry 3 -o "$file" "$fallback"
+  fi
   if [ "$(sha256 "$file")" != "$sum" ]; then
     echo "$file does not match its pinned sha256" >&2
     exit 1
