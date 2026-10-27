@@ -13,7 +13,10 @@
 # alpha for webm, ProRes 4444 for mov, GIF, libwebp for animated WebP with
 # alpha, the decoders that verify each, and raw frames in over a pipe. For
 # sound: the decoders for the audio files a document uses, FFmpeg's AAC for
-# mp4, libopus for webm, PCM for mov, and raw samples in and out. No network,
+# mp4, libopus for webm, PCM for mov, and raw samples in and out. For footage
+# a document plays: H.264, HEVC, VP8, VP9, AV1 (dav1d) and ProRes decoded to
+# raw frames, and the filters that conform a clip for the web (constant rate,
+# HDR mapped to SDR through a LUT clayzo computes). No network,
 # devices or autodetected system libraries. GPL because of x264, never nonfree,
 # so it can be redistributed.
 set -euo pipefail
@@ -65,6 +68,7 @@ case $target in
     x264_host=$([ "$arch" = arm64 ] && echo aarch64-apple-darwin || echo x86_64-apple-darwin)
     vpx_target=$([ "$arch" = arm64 ] && echo arm64-darwin20-gcc || echo x86_64-darwin20-gcc)
     ff_target=(--target-os=darwin --arch="$arch" --enable-cross-compile --cc="$cc")
+    meson_system=darwin
     ldflags=""
     extra_libs=""
     ;;
@@ -75,6 +79,7 @@ case $target in
     x264_host=$arch-linux-musl
     vpx_target=$([ "$arch" = x86_64 ] && echo x86_64-linux-gcc || echo arm64-linux-gcc)
     ff_target=(--cc=gcc)
+    meson_system=linux
     ldflags="-static"
     extra_libs=""
     ;;
@@ -85,6 +90,7 @@ case $target in
     x264_host=x86_64-w64-mingw32
     vpx_target=x86_64-win64-gcc
     ff_target=(--target-os=mingw32 --arch=x86_64 --enable-cross-compile --cross-prefix="$cross")
+    meson_system=windows
     ldflags="-static -static-libgcc"
     # mingw keeps the stack protector's runtime in libssp.
     extra_libs="-lssp"
@@ -179,6 +185,38 @@ if [ ! -f "$prefix/lib/libopus.a" ]; then
   )
 fi
 
+if [ ! -f "$prefix/lib/libdav1d.a" ]; then
+  src=$(source_dir dav1d)
+  (
+    cd "$src"
+    # AV1 footage. 8- and 10-bit (phone HDR is 10-bit); no tools or tests.
+    # Always a cross file, so the compiler and architecture are the target's
+    # and never the host's, as for the other libraries.
+    cpu_family=$([ "$arch" = x86_64 ] && echo x86_64 || echo aarch64)
+    read -r -a cc_words <<< "$cc"
+    {
+      echo "[binaries]"
+      printf "c = ["; printf "'%s', " "${cc_words[@]}"; echo "]"
+      echo "ar = '${cross:-}ar'"
+      echo "strip = '${cross:-}strip'"
+      [ "$meson_system" = windows ] && echo "windres = '${cross}windres'"
+      echo "pkg-config = 'pkg-config'"
+      [ "$arch" = x86_64 ] && echo "nasm = '$prefix/bin/nasm'"
+      echo "[host_machine]"
+      echo "system = '$meson_system'"
+      echo "cpu_family = '$cpu_family'"
+      echo "cpu = '$cpu_family'"
+      echo "endian = 'little'"
+    } > "$build/dav1d.cross"
+    meson setup "$build/dav1d" --cross-file "$build/dav1d.cross" \
+      --prefix="$prefix" --libdir=lib --buildtype=release --default-library=static \
+      -Denable_tools=false -Denable_tests=false -Denable_examples=false -Denable_docs=false \
+      -Dbitdepths=8,16 -Dlogging=false
+    ninja -C "$build/dav1d" -j"$jobs"
+    ninja -C "$build/dav1d" install
+  )
+fi
+
 src=$(source_dir ffmpeg)
 (
   cd "$src"
@@ -192,6 +230,11 @@ src=$(source_dir ffmpeg)
   # document is likely to hold (WAV, AIFF, MP3, AAC and M4A, Ogg Vorbis and
   # Opus, FLAC, WebM); aresample and aformat are what FFmpeg inserts to
   # convert between them.
+  #
+  # Footage: a video node's clip is decoded to raw RGBA frames (h264, hevc,
+  # vp8, vp9, av1 via dav1d, prores), and `clayzo package` conforms clips for
+  # the web: fps for a constant rate, and lut3d, with a LUT clayzo computes,
+  # for HLG or PQ HDR to SDR.
   ./configure \
     --prefix="$prefix" \
     "${ff_target[@]}" \
@@ -200,7 +243,7 @@ src=$(source_dir ffmpeg)
     --extra-ldflags="-L$prefix/lib $ldflags" \
     ${extra_libs:+--extra-libs="$extra_libs"} \
     ${ff_asm[@]+"${ff_asm[@]}"} \
-    --enable-gpl --enable-libx264 --enable-libvpx --enable-libwebp --enable-libopus \
+    --enable-gpl --enable-libx264 --enable-libvpx --enable-libwebp --enable-libopus --enable-libdav1d \
     --disable-autodetect --disable-everything --disable-network \
     --disable-doc --disable-debug --disable-ffplay --disable-ffprobe --disable-avdevice \
     --enable-protocol=file,pipe \
@@ -210,12 +253,16 @@ src=$(source_dir ffmpeg)
     --enable-encoder=libx264,libvpx_vp9,prores_ks,gif,libwebp_anim,rawvideo \
     --enable-encoder=aac,libopus,pcm_s24le,pcm_f32le \
     --enable-decoder=rawvideo,h264,prores,libvpx_vp9,vp9,gif,webp_anim,webp \
+    --enable-decoder=hevc,vp8,libdav1d \
     --enable-decoder=pcm_u8,pcm_s16le,pcm_s16be,pcm_s24le,pcm_s24be,pcm_s32le,pcm_s32be \
     --enable-decoder=pcm_f32le,pcm_f32be,pcm_f64le,pcm_f64be,pcm_alaw,pcm_mulaw \
     --enable-decoder=mp3float,aac,alac,flac,vorbis,opus \
     --enable-parser=gif,h264,vp9,prores,webp,aac,mpegaudio,flac,vorbis,opus \
+    --enable-parser=hevc,vp8,av1 \
+    --enable-bsf=hevc_mp4toannexb,h264_mp4toannexb \
     --enable-bsf=vp9_superframe,vp9_superframe_split \
     --enable-filter=format,split,palettegen,paletteuse,scale,null,copy,fps,setpts,trim \
+    --enable-filter=lut3d,colorspace,transpose,hflip,vflip,rotate \
     --enable-filter=aresample,aformat,anull,atrim,asetpts
   make -j"$jobs"
 )
@@ -233,5 +280,5 @@ case $target in
   win32-*) "${cross}strip" "$out/$exe" ;;
 esac
 cp "$src/COPYING.GPLv2" "$out/COPYING.GPLv2"
-awk '$1 == "ffmpeg" || $1 == "x264" || $1 == "libvpx" || $1 == "libwebp" || $1 == "opus" { print $1, $2 }' "$here/sources.txt" > "$out/VERSIONS"
+awk '$1 == "ffmpeg" || $1 == "x264" || $1 == "libvpx" || $1 == "libwebp" || $1 == "opus" || $1 == "dav1d" { print $1, $2 }' "$here/sources.txt" > "$out/VERSIONS"
 echo "built $out/$exe ($(wc -c < "$out/$exe") bytes)"

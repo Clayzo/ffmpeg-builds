@@ -55,7 +55,7 @@ for (const [target, { os, cpu, label }] of Object.entries(targets)) {
 
 FFmpeg ${versions.ffmpeg} for ${label}, built for the [clayzo](https://www.npmjs.com/package/clayzo) CLI. clayzo installs it on this platform itself; you don't need to install it.
 
-It holds only what clayzo's exports use: x264 for H.264, libvpx for VP9 with alpha, ProRes 4444, GIF and libwebp for animated WebP with alpha, AAC, libopus and PCM for sound, the decoders for the audio files a document uses, and the decoders that verify them. No network access, devices or system libraries beyond the operating system's own.
+It holds only what clayzo's exports use: x264 for H.264, libvpx for VP9 with alpha, ProRes 4444, GIF and libwebp for animated WebP with alpha, AAC, libopus and PCM for sound, the decoders for the audio files and footage a document uses (H.264, HEVC, VP8, VP9, AV1 through dav1d, ProRes), and the decoders that verify them. No network access, devices or system libraries beyond the operating system's own.
 
 | Component | Version | License |
 | --- | --- | --- |
@@ -64,10 +64,11 @@ It holds only what clayzo's exports use: x264 for H.264, libvpx for VP9 with alp
 | libvpx | ${versions.libvpx} | BSD-3-Clause |
 | libwebp | ${versions.libwebp} | BSD-3-Clause |
 | libopus | ${versions.opus} | BSD-3-Clause |
+| dav1d | ${versions.dav1d} | BSD-2-Clause |
 
 ## License and source
 
-This binary is licensed under the GNU General Public License, version 2 or (at your option) any later version; see \`LICENSE\`. Its complete corresponding source, the FFmpeg, x264, libvpx, libwebp and libopus sources and the scripts that built it, is published with the release it came from: ${repository}/releases/tag/v${version}.
+This binary is licensed under the GNU General Public License, version 2 or (at your option) any later version; see \`LICENSE\`. Its complete corresponding source, the FFmpeg, x264, libvpx, libwebp, libopus and dav1d sources and the scripts that built it, is published with the release it came from: ${repository}/releases/tag/v${version}.
 `,
   );
   console.log(`${name}@${version}`);
