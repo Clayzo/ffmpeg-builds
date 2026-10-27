@@ -6,7 +6,7 @@
 #   smoke-test.sh <path-to-ffmpeg> [runner, e.g. wine]
 set -euo pipefail
 
-ffmpeg=$1
+ffmpeg=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
 runner=${2:-}
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -151,9 +151,11 @@ done
   echo "LUT_3D_SIZE 2"
   for b in 0 1; do for g in 0 1; do for r in 0 1; do echo "$r $g $b"; done; done; done
 } > "$work/identity.cube"
-ff -y -i "$here/fixtures/hevc-main10-hlg.mp4" \
-  -vf "scale=in_color_matrix=bt2020:in_range=tv,format=rgb48le,lut3d=file=$work/identity.cube,scale=out_color_matrix=bt709:out_range=tv,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,format=yuv420p" \
-  -fps_mode cfr -r 24 -c:v libx264 -crf 18 -movflags +faststart "$work/conformed.mp4"
+# The LUT is named relative to the working directory, as clayzo does: a
+# filtergraph can't hold a Windows path's drive colon and backslashes as is.
+(cd "$work" && ff -y -i "$here/fixtures/hevc-main10-hlg.mp4" \
+  -vf "scale=in_color_matrix=bt2020:in_range=tv,format=rgb48le,lut3d=file=identity.cube,scale=out_color_matrix=bt709:out_range=tv,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,format=yuv420p" \
+  -fps_mode cfr -r 24 -c:v libx264 -crf 18 -movflags +faststart "$work/conformed.mp4")
 ff -i "$work/conformed.mp4" -map 0:v:0 -f rawvideo -pix_fmt rgba "$work/conformed.rgba"
 bytes=$(wc -c < "$work/conformed.rgba" | tr -d ' ')
 [ "$bytes" -gt 0 ] || { echo "the conformed clip decoded to nothing" >&2; exit 1; }
