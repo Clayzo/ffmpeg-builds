@@ -234,7 +234,7 @@ src=$(source_dir ffmpeg)
   # Footage: a video node's clip is decoded to raw RGBA frames (h264, hevc,
   # vp8, vp9, av1 via dav1d, prores), and `clayzo package` conforms clips for
   # the web: fps for a constant rate, and lut3d, with a LUT clayzo computes,
-  # for HLG or PQ HDR to SDR.
+  # for HLG or PQ HDR to SDR, then setparams to tag the result BT.709.
   ./configure \
     --prefix="$prefix" \
     "${ff_target[@]}" \
@@ -262,7 +262,7 @@ src=$(source_dir ffmpeg)
     --enable-bsf=hevc_mp4toannexb,h264_mp4toannexb \
     --enable-bsf=vp9_superframe,vp9_superframe_split \
     --enable-filter=format,split,palettegen,paletteuse,scale,null,copy,fps,setpts,trim \
-    --enable-filter=lut3d,colorspace,transpose,hflip,vflip,rotate \
+    --enable-filter=lut3d,colorspace,setparams,transpose,hflip,vflip,rotate \
     --enable-filter=aresample,aformat,anull,atrim,asetpts
   make -j"$jobs"
 )

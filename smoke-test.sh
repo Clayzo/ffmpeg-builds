@@ -152,7 +152,7 @@ done
   for b in 0 1; do for g in 0 1; do for r in 0 1; do echo "$r $g $b"; done; done; done
 } > "$work/identity.cube"
 ff -y -i "$here/fixtures/hevc-main10-hlg.mp4" \
-  -vf "scale=in_color_matrix=bt2020:in_range=tv,format=rgb48le,lut3d=file=$work/identity.cube,format=yuv420p" \
+  -vf "scale=in_color_matrix=bt2020:in_range=tv,format=rgb48le,lut3d=file=$work/identity.cube,scale=out_color_matrix=bt709:out_range=tv,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,format=yuv420p" \
   -fps_mode cfr -r 24 -c:v libx264 -crf 18 -movflags +faststart "$work/conformed.mp4"
 ff -i "$work/conformed.mp4" -map 0:v:0 -f rawvideo -pix_fmt rgba "$work/conformed.rgba"
 bytes=$(wc -c < "$work/conformed.rgba" | tr -d ' ')
