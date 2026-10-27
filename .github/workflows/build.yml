@@ -50,6 +50,7 @@ jobs:
         if: startsWith(matrix.target, 'darwin-')
         run: |
           command -v pkg-config >/dev/null || brew install pkgconf
+          command -v meson >/dev/null || brew install meson ninja
           FFMPEG_DOWNLOADS="$PWD/downloads" ./build.sh "${{ matrix.target }}" work
       - name: Build in a container
         if: matrix.image
@@ -123,7 +124,7 @@ jobs:
             tar -czf "release/ffmpeg-$version-$target.tar.gz" -C "$dir" .
           done
           libvpx=$(awk '$1 == "libvpx" { print $2 }' sources.txt)
-          cp downloads/ffmpeg-*.tar.xz downloads/ffmpeg-*.tar.xz.asc downloads/x264-*.tar.bz2 downloads/libwebp-*.tar.gz downloads/opus-*.tar.gz release/
+          cp downloads/ffmpeg-*.tar.xz downloads/ffmpeg-*.tar.xz.asc downloads/x264-*.tar.bz2 downloads/libwebp-*.tar.gz downloads/opus-*.tar.gz downloads/dav1d-*.tar.xz release/
           cp "downloads/v$libvpx.tar.gz" "release/libvpx-$libvpx.tar.gz"
           (cd release && sha256sum -- * > SHA256SUMS)
           {

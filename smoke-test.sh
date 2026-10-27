@@ -6,7 +6,7 @@
 #   smoke-test.sh <path-to-ffmpeg> [runner, e.g. wine]
 set -euo pipefail
 
-ffmpeg=$1
+ffmpeg=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
 runner=${2:-}
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -126,3 +126,37 @@ for pair in "mp4 -c:a aac -b:a 192k" "webm -c:a libopus -b:a 160k" "mov -c:a pcm
   fi
   echo "sound.$ext: $frames frames and $((bytes / 8)) samples of sound round-trip"
 done
+
+# Footage. A video node's clip is decoded to raw RGBA frames, one stream per
+# clip; fixtures/ holds six-frame 64x48 clips of each codec this build decodes
+# and cannot itself encode (made with another ffmpeg: x265, SVT-AV1, libvpx).
+here=$(cd "$(dirname "$0")" && pwd)
+fixture_bytes=$((64 * 48 * 4 * 6))
+for clip in hevc-main10-hlg.mp4 av1-10bit.mp4 vp8.webm out.mp4 out.mov out.webm; do
+  file=$here/fixtures/$clip
+  [ -f "$file" ] || file=$work/$clip
+  ff -i "$file" -map 0:v:0 -an -f rawvideo -pix_fmt rgba -fps_mode passthrough "$work/$clip.footage.rgba"
+  bytes=$(wc -c < "$work/$clip.footage.rgba" | tr -d ' ')
+  want=$([ -f "$here/fixtures/$clip" ] && echo $fixture_bytes || echo $((frame_bytes * frames)))
+  if [ "$bytes" -ne "$want" ]; then
+    echo "$clip decoded to $bytes bytes of footage, expected $want" >&2
+    exit 1
+  fi
+  echo "$clip: decoded as footage"
+done
+
+# What `clayzo package` does to a clip a browser cannot show exactly: HDR
+# through a LUT to SDR, at a constant rate, as H.264 with AAC.
+{
+  echo "LUT_3D_SIZE 2"
+  for b in 0 1; do for g in 0 1; do for r in 0 1; do echo "$r $g $b"; done; done; done
+} > "$work/identity.cube"
+# The LUT is named relative to the working directory, as clayzo does: a
+# filtergraph can't hold a Windows path's drive colon and backslashes as is.
+(cd "$work" && ff -y -i "$here/fixtures/hevc-main10-hlg.mp4" \
+  -vf "scale=in_color_matrix=bt2020:in_range=tv,format=rgb48le,lut3d=file=identity.cube,scale=out_color_matrix=bt709:out_range=tv,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,format=yuv420p" \
+  -fps_mode cfr -r 24 -c:v libx264 -crf 18 -movflags +faststart "$work/conformed.mp4")
+ff -i "$work/conformed.mp4" -map 0:v:0 -f rawvideo -pix_fmt rgba "$work/conformed.rgba"
+bytes=$(wc -c < "$work/conformed.rgba" | tr -d ' ')
+[ "$bytes" -gt 0 ] || { echo "the conformed clip decoded to nothing" >&2; exit 1; }
+echo "hevc-main10-hlg.mp4: conformed to SDR H.264 at 24 fps"

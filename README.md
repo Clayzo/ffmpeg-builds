@@ -21,15 +21,16 @@ Only what clayzo's exports use:
 - sound for the videos: FFmpeg's own AAC encoder (mp4), libopus (webm) and 24-bit PCM (mov)
 - the decoders, demuxers and parsers that read those files back, which is how clayzo verifies an export
 - the decoders and demuxers for the audio files a document uses (WAV, AIFF, MP3, AAC and M4A, Ogg Vorbis and Opus, FLAC, WebM), which clayzo reads to mix a soundtrack
+- the decoders for footage a document plays (H.264, HEVC, VP8, VP9, AV1 through dav1d, ProRes; 8- and 10-bit), and the filters clayzo conforms a clip for the web with: `fps` for a constant rate, and `lut3d` for HDR (HLG, PQ) to SDR through a LUT clayzo computes
 - raw frames and samples in over a pipe, files and pipes out
 
-System libraries are not autodetected. Each binary links only the operating system's own libraries, and on Linux none at all. It is about 8 to 12 MB, where a general-purpose static FFmpeg is 45 MB or more.
+System libraries are not autodetected. Each binary links only the operating system's own libraries, and on Linux none at all. It is about 9 to 14 MB, where a general-purpose static FFmpeg is 45 MB or more.
 
 ## Sources and verification
 
-`sources.txt` pins every source by URL and sha256. `fetch-sources.sh` refuses a file whose checksum differs, and checks FFmpeg's tarball against FFmpeg's release signature, made with the key in `keys/` and pinned by fingerprint (`FCF9 86EA 15E6 E293 A564 4F10 B432 2F04 D676 58D8`). When pinned, each source was also checked against Homebrew's formula: the same checksum for FFmpeg, libvpx, libwebp and libopus, and the same commit for x264.
+`sources.txt` pins every source by URL and sha256. `fetch-sources.sh` refuses a file whose checksum differs, and checks FFmpeg's tarball against FFmpeg's release signature, made with the key in `keys/` and pinned by fingerprint (`FCF9 86EA 15E6 E293 A564 4F10 B432 2F04 D676 58D8`). When pinned, each source was also checked against Homebrew's formula: the same checksum for FFmpeg, libvpx, libwebp and libopus, and the same commit for x264. dav1d's is VideoLAN's release tarball, matching the sha256 VideoLAN publishes beside it.
 
-The build container images are pinned by digest, and the workflow's actions by commit. Every build runs `smoke-test.sh`: each export format is encoded with clayzo's own arguments, decoded back and counted, and the license is checked to be redistributable. Windows builds are tested on Windows.
+The build container images are pinned by digest, and the workflow's actions by commit. Every build runs `smoke-test.sh`: each export format is encoded with clayzo's own arguments, decoded back and counted; each footage codec in `fixtures/` (six-frame clips made with another ffmpeg, since this one encodes none of them) is decoded; an HLG clip is conformed to SDR H.264; and the license is checked to be redistributable. Windows builds are tested on Windows.
 
 ## Building
 
@@ -43,8 +44,8 @@ Linux and Windows build in the containers under `docker/`, as `.github/workflows
 
 ## Releasing
 
-Push a tag `vX.Y.Z`. The workflow builds and tests every target, creates a GitHub release with the five binaries, the exact FFmpeg, x264, libvpx, libwebp and libopus sources, and `SHA256SUMS`, then publishes the five npm packages at `X.Y.Z` with provenance. It needs an `NPM_TOKEN` secret that can publish to the `@clayzo` scope.
+Push a tag `vX.Y.Z`. The workflow builds and tests every target, creates a GitHub release with the five binaries, the exact FFmpeg, x264, libvpx, libwebp, libopus and dav1d sources, and `SHA256SUMS`, then publishes the five npm packages at `X.Y.Z` with provenance. It needs an `NPM_TOKEN` secret that can publish to the `@clayzo` scope.
 
 ## License
 
-The binaries are licensed under the GNU General Public License, version 2 or (at your option) any later version, because they include x264. FFmpeg is LGPL-2.1-or-later on its own, x264 is GPL-2.0-or-later, and libvpx, libwebp and libopus are BSD-3-Clause. The scripts in this repository are released under the same license, in `LICENSE`. Each GitHub release carries the complete corresponding source for its binaries.
+The binaries are licensed under the GNU General Public License, version 2 or (at your option) any later version, because they include x264. FFmpeg is LGPL-2.1-or-later on its own, x264 is GPL-2.0-or-later, libvpx, libwebp and libopus are BSD-3-Clause, and dav1d is BSD-2-Clause. The scripts in this repository are released under the same license, in `LICENSE`. Each GitHub release carries the complete corresponding source for its binaries.
